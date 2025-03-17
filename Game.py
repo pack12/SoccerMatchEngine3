@@ -29,6 +29,7 @@ class Game:
         for event in pygame.event.get():
             if event.type == pygame.MOUSEBUTTONDOWN:
                 print(f'{pygame.mouse.get_pos()}')
+                # pygame.draw.circle(self.win,(0,0,255),pygame.mouse.get_pos(),3.0)
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
@@ -66,6 +67,7 @@ class Game:
         playerData.get_player_rects(players)
         print(playerData.playerRects)
         angle = 0
+        player_frame = 0
 
         while self.running:
 
@@ -80,15 +82,35 @@ class Game:
 
             for i in players:
                 if i.fullName == "Erling Haaland":
+
                     # print(i.state)
-                    if i.state == "Idle":
+                    if i.state == "Idle" and i.initial_scan:
 
                         i.update_state(AIState.FIND_DRIBBLE_LANE)
                     elif i.state == AIState.FIND_DRIBBLE_LANE:
-                        i.scan_in_front(playerData.playerRects)
-                        # print(f'X: {i.player_vision_rect.x} Y: {i.player_vision_rect.y} Width: {i.player_vision_rect.width} Height: {i.player_vision_rect.height}')
+                        i.scan_in_front(playerData.playerRects, self.win)
+                        if i.completed_scan:
+                            # i.update_state(AIState.IDLE)
+                            #Have player make decision where to go with the ball
+                            i.choose_dribble_lane(playerData, self.win)
+                            i.update_state(AIState.DRIBBLING)
+                    elif i.state == AIState.DRIBBLING:
+                        # print("Player is dribbling")
+                        i.move(i.chosen_dribble_lane[player_frame][0], i.chosen_dribble_lane[player_frame][1])
 
+                        if player_frame < len(i.chosen_dribble_lane) - 4:
+                            player_frame += 4
 
+                        if player_frame == len(i.chosen_dribble_lane) - 4:
+                            # print("Player completed dribble")
+                            i.update_state(AIState.COMPlETED_DRIBBLE)
+                    elif i.state == AIState.COMPlETED_DRIBBLE:
+                        i.initial_scan = True
+                        i.state = AIState.IDLE
+                        i.completed_scan = False
+                        player_frame = 0
+                        i.list_of_potential_lanes = []
+                        i.chosen_dribble_lane = []
 
             ball.draw_ball(self.win, players, playerData)
             pygame.display.flip()  # Update Display

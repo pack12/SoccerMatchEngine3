@@ -19,7 +19,12 @@ class Player:
         self.player_vision_rect = None
         self.scan_right = False
         self.scan_left = False
-        self.we_need_this_to_get_past_zero = True
+        self.initial_scan = True
+        self.completed_scan = False
+        self.list_of_potential_lanes = []
+        self.new_x = None
+        self.new_y = None
+        self.chosen_dribble_lane = []
         # self.scan_in_front = False
 
         # self.passing = kwargs.get('passing', 10)
@@ -31,8 +36,10 @@ class Player:
         # self.kickOff = kwargs.get('kickOff',False)
         # self.position = kwargs.get('position',None)
     def move(self, newX,newY):
-        self.x = newX
-        self.y = newY
+        if newX > 0 and newX <= 1700 and newY > 0 and newY <=925:
+
+            self.x = newX
+            self.y = newY
 
     def update_angle(self, newAngle):
         self.angle = newAngle % 360
@@ -40,30 +47,35 @@ class Player:
     def update_state(self, new_state):
         self.state = new_state
 
-    def scan_in_front(self, player_data):
+    def scan_in_front(self, player_data, win):
 
-        if self.angle == 0 and self.we_need_this_to_get_past_zero == True:
+        if self.angle == 0 and self.initial_scan == True:
             self.scan_right = True
             self.scan_left = False
-            self.we_need_this_to_get_past_zero = False
+            self.initial_scan = False
         elif self.angle == 80:
             self.scan_left = True
             self.scan_right = False
-        elif self.angle == 290:
+        elif self.angle == 292:
             self.scan_right = True
             self.scan_left = False
 
 
         if self.scan_right:
 
-            self.angle += 2
+            self.angle += 4
+            self.update_angle(self.angle)
+            # print(self.angle)
+            if self.angle == 0:
+                self.scan_right = False
+                self.completed_scan = True
+
+
+        if self.scan_left:
+            self.angle -= 4
             self.update_angle(self.angle)
             # print(self.angle)
 
-        if self.scan_left:
-            self.angle -= 2
-            self.update_angle(self.angle)
-            # print(self.angle)
 
 
         # Need list of Man U PLayers
@@ -71,6 +83,85 @@ class Player:
             if i.Team == "Manchester United":
                 if player_data[i].colliderect(self.player_vision_rect):
                     print("Opp Player in vision")
+        for i in player_data:
+            if i.hasBall:
+                player_rect = player_data[i]
+
+                y2 = self.player_vision_rect.y
+                x2 = self.player_vision_rect.x
+
+
+
+                y1 = player_rect.y
+                x1 = player_rect.x
+                slope = (y2-y1)/(x2-x1)
+
+                list_of_points = []
+
+                for i in range(1,101):
+                    # print(i)
+                    x = x1 - i
+                    y = y1 + slope * (x - x1)
+
+                    if (y >= 0 and y<=925) and (x>=0 and x<=1700):
+
+                        list_of_points.append((x,y))
+
+                self.list_of_potential_lanes.append(list_of_points)
+    def choose_dribble_lane(self, player_data, win):
+        # print(f'List of Lanes: {self.list_of_potential_lanes}')
+        list_of_lanes_score = []
+        alpha = 2.0
+        epsilon = 0.1
+        count = 0
+        lane_and_i_scores = {}
+        for lane in self.list_of_potential_lanes:
+            print(f'Lane {count}')
+
+            last_point = lane[-1]
+            print(f'Last Point: {last_point}')
+            # perimeter_rect = pygame.Rect(last_point[0], last_point[1], 100, 100)
+            # pygame.draw.rect(win, (0, 0, 255), perimeter_rect, 2)
+            circle_rect = pygame.draw.circle(win, (0,0,255), (last_point[0], last_point[1]),40, 2)
+            pygame.draw.rect(win, (255,100,0), circle_rect,2)
+
+
+            total_distance = 0
+            player_and_distance_to_point = {}
+            for player in player_data.playerRects:
+                # print(f'{player}')
+                if player.Team == "Manchester United":
+                    # print(player)
+                    distance = player_data.findDistanceToTargetPlayer(last_point, player)
+                    # total_distance += distance
+                    # print(f'Player: {player.fullName} Rect: {player_data.playerRects[player]} Distance to this point: {distance}')
+                    player_and_distance_to_point[player.fullName] = distance
+            # print(f'Average distance to this point: {total_distance/11}')
+            print(f'Distance to this point: {player_and_distance_to_point}')
+            min_key = min(player_and_distance_to_point, key=player_and_distance_to_point.get)
+            min_value = min(player_and_distance_to_point.values())
+
+            sorted_players = sorted(player_and_distance_to_point.items(), key=lambda x: x[1])
+            print(f'Distance to goal: {player_data.findDistance(last_point,(296,449))}')
+
+
+            i_score = (1 / player_data.findDistance(last_point, (368, 431)) + epsilon) # put the - distance to nearest player
+            # print(f'I-score:  {i_score}')
+            lane_and_i_scores[f'Lane{count}'] = i_score
+
+            count += 1
+        # print(lane_and_i_scores)
+        sorted_lane_and_i_scores = sorted(lane_and_i_scores.items(), key=lambda x: x[1])
+        # sorted_lane_and_i_scores = reversed(sorted_lane_and_i_scores)
+        print(f'Sorted Lane and I scores: {sorted_lane_and_i_scores}')
+        # random_lane = random.randint(0, 73)
+
+
+        # print(f'Random INt: {random_lane}')
+        print(f'Length of scan_points: {len(self.list_of_potential_lanes)}')
+        # print(f'PLayer has decided to use the lane: {self.list_of_potential_lanes[random_lane]}')
+        self.chosen_dribble_lane = self.list_of_potential_lanes[-1]
+
 
 
 
@@ -109,6 +200,7 @@ class PlayerData:
                 x2 = center_x + math.cos(math.radians(i.angle + 180)) * (length / 2)
                 y2 = center_y + math.sin(math.radians(i.angle + 180)) * (length / 2)
 
+
                 # Calculate new endpoints using rotation
                 # new_x, new_y = self.rotate_point((center_x - 20, center_y), (center_x, center_y), i.angle)
 
@@ -117,6 +209,7 @@ class PlayerData:
 
                 # line_rect = pygame.draw.line(win, (255,0,0), (center_x, center_y), (new_x-40, new_y-40), 2)
                 i.player_vision_rect = pygame.draw.line(win, (255, 0, 0), (center_x, center_y), (x2, y2), 2)
+                i.player_vision_rect.y = y2
             if i.Team == "Manchester United":
                 # self.get_player_rects(players)
                 win.blit(red_tm,self.playerRects[i])
@@ -282,13 +375,12 @@ class PlayerData:
     def calculatePlayerActions(self,zoneData):
         """So in order to calculate the potential player actions, the player needs to fin"""
         pass
-    def findDistanceToTargetPlayer(self,zoneData,targetPlayer):
+    def findDistanceToTargetPlayer(self,startPoint,targetPlayer):
         """In order to find the distance to target player, I need to get the player with the ball and their
         current zone And I need to get the targetPlayer and the zone they're on"""
-        playerWithBall = self.get_player_with_ball()
 
-        playerWithBallX = playerWithBall.x
-        playerWithBallY = playerWithBall.y
+        playerWithBallX = startPoint[0]
+        playerWithBallY = startPoint[1]
 
         targetPlayerX = targetPlayer.x
         targetPlayerY = targetPlayer.y
@@ -302,41 +394,21 @@ class PlayerData:
         distance = np.linalg.norm(targetPlayerPoint - playerWithBallPoint)
 
         # print("Distance between the points:", distance/147)
-        return distance/147
+        return distance
 
-    def findDistanceToEmptyZone(self,zoneData,targetZone):
+    def findDistance(self, startPoint, targetPoint):
         """In order to find the distance to target player, I need to get the player with the ball and their
                 current zone And I need to get the targetPlayer and the zone they're on"""
-        playerWithBall = self.get_player_with_ball()
-        playerWithBallZone = zoneData.zoneInfo[playerWithBall.Index - 1]
-        playerWithBallX = None
-        playerWithBallY = None
-
-        targetZoneX = None
-        targetZoneY = None
-
-        # Get the playerWithBall x and y location
-        for i in zoneData.zoneInfo:
-            # print(i.Locations)
-            for j in i.Locations:
-                # print(i.Locations[j])
-                if i.Locations[j][1] == playerWithBall:
-                    playerWithBallX = i.Locations[j][0][0]
-                    playerWithBallY = i.Locations[j][0][1]
-
-            if i.index == targetZone.index:
-                targetZoneX = i.Locations['loc_1'][0][0]
-                targetZoneY = i.Locations['loc_1'][0][1]
 
         # Define the coordinates of two points
-        playerWithBallPoint = np.array([playerWithBallX, playerWithBallY])
-        targetZonePoint = np.array([targetZoneX, targetZoneY])
+        startPoint = np.array([startPoint[0], startPoint[1]])
+        targetPoint = np.array([targetPoint[0], targetPoint[1]])
 
         # Calculate the distance between the two points
-        distance = np.linalg.norm(targetZonePoint - playerWithBallPoint)
+        distance = np.linalg.norm(targetPoint - startPoint)
 
         # print("Distance between the points:", distance / 147)
-        return distance / 147
+        return distance
 
     def findDistanceToBall(self,zoneData,player,ball):
         """In order to find the distance to target player, I need to get the player with the ball and their
@@ -409,7 +481,7 @@ class PlayerData:
         for i in zoneData.zoneInfo:
             if len(i.attached_players["Manchester United"]) == 0 and len(i.attached_players["Manchester City"]) == 0:
                 # print(f'Zone {i.index} has no players')
-                zoneDistance = self.findDistanceToEmptyZone(zoneData, i)
+                zoneDistance = self.findDistance(zoneData, i)
 
                 passing = self.get_player_with_ball().passing
 

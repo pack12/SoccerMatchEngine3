@@ -9,6 +9,7 @@ class AIState:
     RETREAT = "Retreat"
     FIND_DRIBBLE_LANE = "FindDribbleLane"
     DRIBBLING = "Dribbling"
+    COMPlETED_DRIBBLE = "CompletedDribble"
     FIND_PASS = "FindPass"
     PASSING = "Passing"
     SHOOTING = "Shooting"
